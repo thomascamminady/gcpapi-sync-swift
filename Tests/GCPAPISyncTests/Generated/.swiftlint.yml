@@ -1,0 +1,11 @@
+# Generated code: one stored property, one initializer parameter and one coding key per
+# Garmin field, so the size rules cannot apply. Everything else is checked as usual.
+disabled_rules:
+  - file_length
+  - type_body_length
+  - function_body_length
+  - function_parameter_count
+  - line_length
+  - identifier_name # Garmin's field names (e.g. hrTimeInZone1)
+  - inclusive_language # Garmin's field names are kept as they are
+  - closure_body_length # one initializer argument per field

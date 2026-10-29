@@ -1,0 +1,162 @@
+name: API drift
+
+# Detects changes to Garmin's Personal API:
+#  * spec:  regenerates the models from Garmin's published OpenAPI document and, when
+#           anything changed, opens a pull request that also sets the version's date
+#           component (0.MINOR.YYYYMMDD) to today. Merging it publishes the release.
+#  * live:  runs the live tests (needs the GARMIN_PERSONAL_API_KEY repository secret)
+#           and opens an issue when the real API no longer matches the models.
+
+on:
+  schedule:
+    - cron: "37 5 * * 1" # Mondays 05:37 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-drift
+  cancel-in-progress: false
+
+jobs:
+  spec:
+    name: Compare with Garmin's published spec
+    runs-on: ubuntu-latest
+    container: swift:6.4@sha256:82152e9f18ee21fc997fd4580b93a14097e465cb10d7a7eee3f2dc85364dd135
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: apt-get update -q && apt-get install -yq --no-install-recommends git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true # bump-version compares with the released versions
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Regenerate models from the live spec
+        run: swift run --force-resolved-versions generate-models | tee "$RUNNER_TEMP/generate.log"
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes in Garmin's spec."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat | tee "$RUNNER_TEMP/diffstat.txt"
+          fi
+
+      - name: Bump the version (Garmin changed, so only the date moves)
+        id: bump
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          swift run --force-resolved-versions bump-version garmin --note "Models regenerated from Garmin's OpenAPI document of $(date -u +%Y-%m-%d)."
+          version=$(sed -n 's/^public let packageVersion = "\(.*\)"$/\1/p' Sources/GCPAPISync/Version.swift)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test the regenerated code
+        id: checks
+        if: steps.diff.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          {
+            swift format lint --strict --recursive --parallel Sources Tests Tools Package.swift &&
+            Scripts/check-warnings.sh --force-resolved-versions &&
+            swift test --force-resolved-versions --filter GCPAPISyncTests
+          } 2>&1 | tee "$RUNNER_TEMP/checks.log"
+
+      - name: Describe the change
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          OUTCOME: ${{ steps.checks.outcome }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          {
+            echo "Garmin's published OpenAPI document changed. This pull request regenerates"
+            echo "\`Sources/GCPAPISync/Models/Generated\` and \`spec/endpoints.json\` and sets the"
+            echo "version to **${VERSION}**. Merging it tags and publishes that release."
+            echo
+            echo "**Checks on the regenerated code: ${OUTCOME}**"
+            echo
+            echo "### Files"
+            echo '```'
+            cat "$RUNNER_TEMP/diffstat.txt"
+            echo '```'
+            echo "### Generator warnings"
+            echo '```'
+            grep '^warning:' "$RUNNER_TEMP/generate.log" || echo "none"
+            echo '```'
+            echo "### Check output (last 80 lines)"
+            echo '```'
+            tail -n 80 "$RUNNER_TEMP/checks.log"
+            echo '```'
+            echo
+            echo "Review the model changes, update corrections in \`Tools/GenerateModels/Spec.swift\`,"
+            echo "wrap any new endpoint in the client, then add a CHANGELOG entry. The Python"
+            echo "version (gcpapi-sync-python) gets the same pull request."
+          } > "$RUNNER_TEMP/body.md"
+
+      - name: Open or update the pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: automation/api-drift
+          delete-branch: true
+          title: "Garmin's Personal API changed (${{ steps.bump.outputs.version }})"
+          commit-message: "Regenerate models from Garmin's current OpenAPI document"
+          body-path: ${{ runner.temp }}/body.md
+          labels: api-drift
+
+  live:
+    name: Check the live API
+    runs-on: ubuntu-latest
+    container: swift:6.4@sha256:82152e9f18ee21fc997fd4580b93a14097e465cb10d7a7eee3f2dc85364dd135
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GARMIN_PERSONAL_API_KEY: ${{ secrets.GARMIN_PERSONAL_API_KEY }}
+    steps:
+      - name: Skip without an API key
+        if: env.GARMIN_PERSONAL_API_KEY == ''
+        run: echo "::notice::Set the GARMIN_PERSONAL_API_KEY repository secret to enable live checks."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.GARMIN_PERSONAL_API_KEY != ''
+        with:
+          persist-credentials: false
+      - name: Live tests
+        if: env.GARMIN_PERSONAL_API_KEY != ''
+        # This log is public: the live tests report fixed messages that name fields at
+        # most, never values (see Tests/LiveTests/LiveTests.swift).
+        env:
+          GCPAPI_LIVE_TESTS: "1"
+        run: swift test --force-resolved-versions --filter LiveTests
+      - name: Tools to report a failure
+        if: failure()
+        run: |
+          apt-get update -q && apt-get install -yq --no-install-recommends curl ca-certificates gpg
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
+          apt-get update -q && apt-get install -yq gh
+      - name: Open or update an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Live API checks are failing"
+          number=$(gh issue list --label api-drift --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "Still failing: $RUN_URL"
+          else
+            gh issue create --title "$title" --label api-drift --body "The live tests failed: $RUN_URL
+
+          Either Garmin changed the API (new fields, changed types, new limits) or the
+          GARMIN_PERSONAL_API_KEY secret expired. Run \`GCPAPI_LIVE_TESTS=1 swift test --filter LiveTests\` locally."
+          fi

@@ -1,0 +1,18 @@
+# Swift Package Manager / Xcode
+.build/
+.swiftpm/
+/*.xcodeproj
+xcuserdata/
+DerivedData/
+Package.resolved.orig
+
+# Secrets
+.apikey
+.env
+*.apikey
+
+# Generated documentation
+site/
+
+# macOS
+.DS_Store

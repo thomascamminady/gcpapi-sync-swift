@@ -1,0 +1,70 @@
+# SwiftLint with every opt-in rule enabled, run with --strict (warnings fail).
+# Rules are disabled only when they contradict swift-format (which owns layout) or idiomatic
+# Swift; each one says why. Generated code has its own scoped exceptions in
+# Sources/GCPAPISync/Models/Generated/.swiftlint.yml.
+included: [Sources, Tests, Tools, Package.swift]
+excluded: [.build]
+opt_in_rules: [all]
+
+disabled_rules:
+  # Layout is swift-format's job; these rules disagree with its output.
+  - attributes
+  - closure_end_indentation
+  - contrasted_opening_brace
+  - multiline_arguments
+  - multiline_arguments_brackets
+  - multiline_call_arguments
+  - multiline_function_chains
+  - multiline_parameters
+  - multiline_parameters_brackets
+  - opening_brace
+  - switch_case_on_newline
+  - trailing_comma
+  - vertical_whitespace_between_cases
+  - let_var_whitespace
+  - conditional_returns_on_newline
+  - extension_access_modifier # swift-format's NoAccessLevelOnExtensionDeclaration wants the opposite
+  # Idiomatic Swift that these rules forbid.
+  - explicit_acl # internal is the default; the public API is explicit and documented
+  - explicit_top_level_acl
+  - explicit_type_interface # type inference
+  - explicit_enum_raw_value # String raw values equal to the case name (CodingKeys)
+  - discouraged_default_parameter # default arguments mirror the Python API's keyword defaults
+  - discouraged_optional_boolean # Garmin's booleans are tri-state: true, false or absent
+  - discouraged_optional_collection # Garmin distinguishes an absent list from an empty one
+  - no_grouping_extension # extensions group a type's members by topic
+  - prefixed_toplevel_constant # no "k" prefixes in Swift
+  - variable_shadowing # `if let value` deliberately shadows
+  - anonymous_argument_in_multiline_closure # $0 in short test closures
+  - required_deinit
+  - one_declaration_per_file # small related types live together
+  - file_name
+  - file_types_order
+  - type_contents_order
+  - sorted_enum_cases # case order is meaningful
+  - no_magic_numbers # API limits and calendar math read better inline (as in the Python version)
+  - optional_data_string_conversion # Garmin's bodies are decoded leniently on purpose
+  - pattern_matching_keywords # swift-format's UseLetInEveryBoundCaseVariable wants the opposite
+  - unneeded_escaping # false positive for Objective-C delegate requirements (URLSession)
+  - incompatible_concurrency_annotation # Swift 6 language mode only; no Swift 5 clients
+
+identifier_name:
+  excluded: [id, a, b, c, d, e, f, g, h, x, y]
+line_length:
+  warning: 100
+  ignores_urls: true
+  ignores_comments: false
+type_body_length:
+  warning: 400
+file_length:
+  warning: 800
+function_body_length:
+  warning: 60
+no_empty_block:
+  disabled_block_types: [initializer_bodies, function_bodies]
+number_separator:
+  minimum_length: 5
+large_tuple:
+  warning: 3
+cyclomatic_complexity:
+  ignores_case_statements: true

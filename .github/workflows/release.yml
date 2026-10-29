@@ -1,0 +1,127 @@
+name: Release
+
+# Every new version that reaches main is released. When Sources/GCPAPISync/Version.swift on
+# main carries a version without a v<version> tag (bump it with `swift run bump-version`),
+# this workflow
+#  1. tests the package and builds the gcpapi command line tool for Linux and macOS,
+#  2. attests the binaries' build provenance (verifiable with `gh attestation verify`),
+#  3. creates the tag and a GitHub release with the binaries.
+# Swift Package Manager (and the Swift Package Index) pick the release up from the tag.
+
+on:
+  push:
+    branches: [main]
+    paths: [Sources/GCPAPISync/Version.swift]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Is this version new?
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.decide.outputs.version }}
+      release: ${{ steps.decide.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - id: decide
+        run: |
+          version=$(sed -n 's/^public let packageVersion = "\(.*\)"$/\1/p' Sources/GCPAPISync/Version.swift)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if git rev-parse --quiet --verify "refs/tags/v${version}" > /dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::v${version} is already released."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Releasing ${version}."
+          fi
+
+  linux:
+    name: Build for Linux
+    needs: check
+    if: needs.check.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    container: swift:6.4@sha256:82152e9f18ee21fc997fd4580b93a14097e465cb10d7a7eee3f2dc85364dd135
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: swift test --force-resolved-versions --filter GCPAPISyncTests
+      - name: Build the static binary
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          swift build --force-resolved-versions -c release --product gcpapi --static-swift-stdlib
+          mkdir dist
+          cp .build/release/gcpapi dist/gcpapi
+          tar -C dist -czf "dist/gcpapi-${VERSION}-linux-x86_64.tar.gz" gcpapi
+          rm dist/gcpapi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-linux
+          path: dist/
+          if-no-files-found: error
+
+  macos:
+    name: Build for macOS
+    needs: check
+    if: needs.check.outputs.release == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: swift test --force-resolved-versions --filter GCPAPISyncTests
+      - name: Build the universal binary
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          swift build --force-resolved-versions -c release --product gcpapi --arch arm64 --arch x86_64
+          mkdir dist
+          cp .build/apple/Products/Release/gcpapi dist/gcpapi
+          dist/gcpapi --version
+          tar -C dist -czf "dist/gcpapi-${VERSION}-macos-universal.tar.gz" gcpapi
+          rm dist/gcpapi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-macos
+          path: dist/
+          if-no-files-found: error
+
+  github-release:
+    name: Attest, tag and release
+    needs: [check, linux, macos]
+    if: needs.check.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # build provenance attestations
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist/
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - name: Create the tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: >-
+          gh release create "v${VERSION}" dist/*
+          --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
+          --title "v${VERSION}" --generate-notes

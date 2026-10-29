@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SWIFTLINT_VERSION: "0.65.1"
+  SWIFTLINT_SHA256: caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d
+
+jobs:
+  checks:
+    name: Lint and compile without warnings
+    runs-on: ubuntu-latest
+    # Swift 6.4, the toolchain whose swift-format output is checked in.
+    container: swift:6.4@sha256:82152e9f18ee21fc997fd4580b93a14097e465cb10d7a7eee3f2dc85364dd135
+    steps:
+      - name: Tools for pre-commit
+        run: apt-get update -q && apt-get install -yq --no-install-recommends git curl unzip ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: SwiftLint ${{ env.SWIFTLINT_VERSION }}
+        run: |
+          curl -fsSL -o /tmp/swiftlint.zip "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux_amd64.zip"
+          echo "${SWIFTLINT_SHA256}  /tmp/swiftlint.zip" | sha256sum -c -
+          unzip -q /tmp/swiftlint.zip -d /usr/local/bin
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: All pre-commit hooks (swift-format, SwiftLint, warnings, policy checks)
+        run: uvx pre-commit run --all-files --show-diff-on-failure
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  linux:
+    name: Tests (Linux, Swift ${{ matrix.swift }})
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - swift: "6.1"
+            image: swift:6.1@sha256:92cafdba8c519c32b83d5aa50539fb3d5a534bc87c3d9437bf6e8984aa1be4f3
+          - swift: "6.2"
+            image: swift:6.2@sha256:e508ef1e4be68087f720de622b91cbf1e32799a7aa96134b35e6f1a1d656db7a
+          - swift: "6.3"
+            image: swift:6.3@sha256:1038d54c80063f5cdfabc4560990c30af64b5de8ebf28161deb22ca4ad5db866
+          - swift: "6.4"
+            image: swift:6.4@sha256:82152e9f18ee21fc997fd4580b93a14097e465cb10d7a7eee3f2dc85364dd135
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: swift test --force-resolved-versions --enable-code-coverage --filter GCPAPISyncTests
+      - name: Line coverage of Sources/ is at least 99%
+        run: swift run --force-resolved-versions check-coverage "$(swift test --show-codecov-path)" --minimum 99
+
+  apple:
+    name: Tests (${{ matrix.platform }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macOS, iOS]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: swift --version
+      - name: macOS
+        if: matrix.platform == 'macOS'
+        run: swift test --force-resolved-versions --filter GCPAPISyncTests
+      - name: iOS simulator
+        if: matrix.platform == 'iOS'
+        run: |
+          set -euo pipefail
+          device=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          runtimes = sorted((r for r in devices if "iOS" in r), reverse=True)
+          print(next(d["udid"] for r in runtimes for d in devices[r] if d["name"].startswith("iPhone")))')
+          xcodebuild test -scheme gcpapi-sync-swift-Package -destination "id=${device}" \
+            -only-testing:GCPAPISyncTests -skipPackagePluginValidation -quiet
+
+  lowest:
+    name: Tests with the lowest supported dependencies
+    runs-on: ubuntu-latest
+    container: swift:6.1@sha256:92cafdba8c519c32b83d5aa50539fb3d5a534bc87c3d9437bf6e8984aa1be4f3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pin every dependency to its lower bound
+        run: |
+          sed -i -E 's/from: "([0-9.]+)"/exact: "\1"/' Package.swift
+          rm -f Package.resolved
+          swift package resolve
+          swift package show-dependencies
+      - run: swift test --filter GCPAPISyncTests
+
+  build:
+    name: Build the CLI and the documentation
+    runs-on: ubuntu-latest
+    container: swift:6.4@sha256:82152e9f18ee21fc997fd4580b93a14097e465cb10d7a7eee3f2dc85364dd135
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Release build of the command line tool
+        run: |
+          swift build --force-resolved-versions -c release --product gcpapi --static-swift-stdlib
+          .build/release/gcpapi --help > /dev/null
+          .build/release/gcpapi --version
+      - name: DocC documentation
+        run: Scripts/build-docs.sh site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  publish-docs:
+    name: Publish documentation
+    # Enable with a repository variable PUBLISH_DOCS=true once GitHub Pages is configured
+    # (Settings > Pages > Source: GitHub Actions).
+    if: github.ref == 'refs/heads/main' && vars.PUBLISH_DOCS == 'true'
+    needs: [build, linux, apple, checks]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
