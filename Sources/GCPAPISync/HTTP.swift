@@ -126,25 +126,39 @@ public protocol HTTPTransport: Sendable {
 ///
 /// Redirects are not followed, so credentials are never sent to another host.
 public final class URLSessionTransport: HTTPTransport {
-    private let session: URLSession
-    private let ownsSession: Bool
-
-    /// A transport with its own ephemeral session (no cookies, no cache).
-    ///
-    /// - Parameter timeout: Seconds to wait for a response before failing.
-    public convenience init(timeout: TimeInterval = 30) {
+    /// The session of every transport made with ``init(timeout:)``: ephemeral (no cookies, no
+    /// cache), never following redirects, and never torn down. Sessions are meant to last as
+    /// long as the process; on Linux, releasing one that still holds open connections can crash
+    /// (swiftlang/swift-corelibs-foundation#5203).
+    private static let shared: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = timeout
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
-        self.init(configuration: configuration)
+        return URLSession(
+            configuration: configuration, delegate: RedirectBlocker(), delegateQueue: nil)
+    }()
+
+    let session: URLSession
+    /// The timeout of every request, or `nil` for the session's own.
+    let timeout: TimeInterval?
+    private let ownsSession: Bool
+
+    /// A transport on the shared session.
+    ///
+    /// - Parameter timeout: Seconds to wait for a response before failing.
+    public init(timeout: TimeInterval = 30) {
+        session = Self.shared
+        self.timeout = timeout
+        ownsSession = false
     }
 
     /// A transport with its own session using `configuration`, never following redirects.
+    /// For tests, whose stubbed sessions open no connections.
     init(configuration: URLSessionConfiguration) {
         session = URLSession(
             configuration: configuration, delegate: RedirectBlocker(), delegateQueue: nil
         )
+        timeout = nil
         ownsSession = true
     }
 
@@ -153,6 +167,7 @@ public final class URLSessionTransport: HTTPTransport {
     /// Such a session follows redirects unless its delegate prevents it.
     public init(session: URLSession) {
         self.session = session
+        timeout = nil
         ownsSession = false
     }
 
@@ -162,17 +177,26 @@ public final class URLSessionTransport: HTTPTransport {
         }
     }
 
-    /// Send `request` with `URLSession`.
-    public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+    /// The `URLRequest` for `request`. A timeout set here takes precedence over the
+    /// session's, on Apple platforms and on Linux alike.
+    func urlRequest(for request: HTTPRequest) -> URLRequest {
         var urlRequest = URLRequest(url: request.url)
         urlRequest.httpMethod = request.method
         for (name, value) in request.headers {
             urlRequest.setValue(value, forHTTPHeaderField: name)
         }
+        if let timeout {
+            urlRequest.timeoutInterval = timeout
+        }
+        return urlRequest
+    }
+
+    /// Send `request` with `URLSession`.
+    public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: urlRequest)
+            (data, response) = try await session.data(for: urlRequest(for: request))
         } catch let error as URLError {
             throw TransportError(error.localizedDescription, isTimeout: error.code == .timedOut)
         }

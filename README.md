@@ -49,7 +49,7 @@ the same endpoints, models, corrections, tests and release process, in idiomatic
 Swift Package Manager:
 
 ```text
-.package(url: "https://github.com/thomascamminady/gcpapi-sync-swift.git", from: "0.1.20261022")
+.package(url: "https://github.com/thomascamminady/gcpapi-sync-swift.git", from: "0.2.20261022")
 ```
 
 then add `.product(name: "GCPAPISync", package: "gcpapi-sync-swift")` to your target. In

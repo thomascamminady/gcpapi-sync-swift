@@ -8,6 +8,19 @@ date records when the current state of Garmin's API was picked up (it changes on
 Garmin changes something). `swift run bump-version` computes the next version. The date
 component matches the Python version's: the same date means the same state of Garmin's API.
 
+## [0.2.20261022] - 2026-10-29
+
+### Changed
+
+- Requires Swift 6.2 or newer (swift-log 1.16 needs it).
+
+### Fixed
+
+- `URLSessionTransport` instances made with `init(timeout:)` share one long-lived session and
+  set their timeout on each request. Releasing a session with open connections could crash
+  on Linux (swiftlang/swift-corelibs-foundation#5203), for example when a second
+  `GarminClient` was created after the first one was released.
+
 ## [0.1.20261022] - 2026-10-29
 
 ### Added

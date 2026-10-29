@@ -99,9 +99,24 @@ private func request(_ path: String) throws -> HTTPRequest {
         configuration.protocolClasses = [StubProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        let response = try await URLSessionTransport(session: session).send(try request("/ok"))
+        let transport = URLSessionTransport(session: session)
+        let response = try await transport.send(try request("/ok"))
         #expect(response.statusCode == 200)
-        _ = URLSessionTransport(timeout: 5)
+        #expect(transport.session === session)
+        #expect(transport.timeout == nil)
+    }
+
+    @Test func defaultTransportsShareOneSession() throws {
+        // Sessions are never torn down: on Linux that can crash with open connections.
+        let quick = URLSessionTransport(timeout: 5)
+        let patient = URLSessionTransport()
+        #expect(quick.session === patient.session)
+        #expect(patient.timeout == 30)
+        let built = quick.urlRequest(for: try request("/ok"))
+        #expect(built.timeoutInterval == 5)
+        #expect(built.httpMethod == "POST")
+        #expect(built.value(forHTTPHeaderField: "User-Agent") == "tests")
+        #expect(transport().urlRequest(for: try request("/ok")).timeoutInterval == 60)
     }
 
     @Test func queryItemsWithoutValues() throws {
