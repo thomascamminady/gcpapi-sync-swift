@@ -3,7 +3,7 @@
 [![CI](https://github.com/thomascamminady/gcpapi-sync-swift/actions/workflows/ci.yml/badge.svg)](https://github.com/thomascamminady/gcpapi-sync-swift/actions/workflows/ci.yml)
 [![API drift](https://github.com/thomascamminady/gcpapi-sync-swift/actions/workflows/drift.yml/badge.svg)](https://github.com/thomascamminady/gcpapi-sync-swift/actions/workflows/drift.yml)
 [![Docs](https://img.shields.io/badge/docs-DocC-blue)](https://camminady.dev/gcpapi-sync-swift/documentation/gcpapisync/)
-![Swift](https://img.shields.io/badge/Swift-6.1%20%7C%206.2%20%7C%206.3%20%7C%206.4-orange)
+![Swift](https://img.shields.io/badge/Swift-6.2%20%7C%206.3%20%7C%206.4-orange)
 ![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 An unofficial Swift client and command line tool for the
@@ -55,7 +55,7 @@ Swift Package Manager:
 then add `.product(name: "GCPAPISync", package: "gcpapi-sync-swift")` to your target. In
 Xcode: *File → Add Package Dependencies…* and paste the repository URL.
 
-Requires Swift 6.1 or newer; iOS 16, macOS 13, tvOS 16, watchOS 9, visionOS 1 or Linux.
+Requires Swift 6.2 or newer; iOS 16, macOS 13, tvOS 16, watchOS 9, visionOS 1 or Linux.
 API documentation: [camminady.dev/gcpapi-sync-swift](https://camminady.dev/gcpapi-sync-swift/documentation/gcpapisync/).
 
 The `gcpapi` command line tool:

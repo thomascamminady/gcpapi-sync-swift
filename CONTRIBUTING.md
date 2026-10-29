@@ -25,7 +25,7 @@ The same as gcpapi-sync-python, in Swift terms:
   A hook rejects them; change the code instead.
 - No `Any` or `[String: Any]` in the public API: responses are `Codable` models, unknown
   payloads are `JSONValue`.
-- Line coverage of at least 99%, on Swift 6.1 to 6.4 on Linux, on macOS and in the iOS
+- Line coverage of at least 99%, on Swift 6.2 to 6.4 on Linux, on macOS and in the iOS
   simulator, and against the lowest supported dependency versions.
 
 ## Tests

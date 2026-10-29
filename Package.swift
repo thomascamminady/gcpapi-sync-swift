@@ -1,4 +1,4 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 import PackageDescription
 
 /// Language settings for every target: Swift 6 mode (complete concurrency checking)
