@@ -251,22 +251,22 @@ private func activities(_ count: Int, from offset: Int = 0) -> Reply {
             return activities(min(limit, max(0, 100 - start)), from: start)
         }
         let result = try await makeClient(fake).searchActivities(
-            limit: 45, filters: ActivityFilters(activityType: "running"))
+            limit: 100, filters: ActivityFilters(activityType: "running"))
 
-        #expect(result.count == 45)
+        #expect(result.count == 100)
         let requests = await fake.dataRequests
         #expect(
             requests.map { [$0.param("start"), $0.param("limit")] } == [
-                ["0", "20"], ["20", "20"], ["40", "5"],
+                ["0", "45"], ["45", "45"], ["90", "10"],
             ])
         #expect(requests.allSatisfy { $0.param("activityType") == "running" })
     }
 
     @Test func searchStopsAtTheLastPage() async throws {
         let fake = FakeGarmin()
-        await fake.reply(searchPath, activities(20), activities(3, from: 20))
+        await fake.reply(searchPath, activities(45), activities(3, from: 45))
         let result = try await makeClient(fake).searchActivities(start: 0, limit: 100)
-        #expect(result.count == 23)
+        #expect(result.count == 48)
         #expect(await fake.dataRequests.count == 2)
     }
 

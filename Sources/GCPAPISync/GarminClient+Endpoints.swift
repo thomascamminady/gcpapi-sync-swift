@@ -33,7 +33,8 @@ extension GarminClient {
 
     /// Up to `limit` activities matching `filters`, newest first by default.
     ///
-    /// Large limits are fetched in several pages (the server fails on big pages).
+    /// Large limits are fetched in pages of 45, the most the server answers at once: every
+    /// request counts against Garmin's limit of 100 a minute.
     ///
     /// - Parameters:
     ///   - start: Zero-based offset of the first activity.
@@ -51,7 +52,7 @@ extension GarminClient {
         let query = try filters.queryItems()
         var activities: [SummarizedActivity] = []
         while activities.count < limit {
-            let size = min(limit - activities.count, Constants.defaultActivityPageSize)
+            let size = min(limit - activities.count, Constants.maxActivityPageSize)
             let page = try await request(
                 Endpoints.searchActivities(
                     start: start + activities.count, limit: size, filters: query))
@@ -80,7 +81,7 @@ extension GarminClient {
     ///   malformed date filter.
     /// - Returns: An `AsyncSequence` of activities.
     public func iterActivities(
-        start: Int = 0, pageSize: Int = 20, filters: ActivityFilters = ActivityFilters()
+        start: Int = 0, pageSize: Int = 45, filters: ActivityFilters = ActivityFilters()
     ) throws -> ActivitySequence {
         guard (1...Constants.maxActivityPageSize).contains(pageSize) else {
             throw InvalidArgumentError(
