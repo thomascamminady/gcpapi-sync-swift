@@ -33,7 +33,30 @@ private func undocumented(_ values: [some GarminModel]) -> Set<String> {
     values.reduce(into: []) { $0.formUnion($1.undocumentedFields) }
 }
 
-@Suite(.enabled(if: enabled, "set GCPAPI_LIVE_TESTS=1 to run against the real API"), .serialized)
+/// An endpoint whose server still fails after the client's retries is down at Garmin: that is
+/// no change of the API, which these tests look for. It becomes a known issue, which names the
+/// status in the log and does not fail the check.
+private struct OutagesAreKnownIssues: SuiteTrait, TestTrait, TestScoping {
+    var isRecursive: Bool { true }
+
+    func provideScope(
+        for test: Test, testCase _: Test.Case?,
+        performing function: @Sendable () async throws -> Void
+    ) async throws {
+        do {
+            try await function()
+        } catch let error as InternalServerError {
+            let status = "Garmin's server answered HTTP \(error.statusCode)"
+            withKnownIssue("\(test.name): \(status), an outage on Garmin's side") {
+                throw error
+            }
+        }
+    }
+}
+
+@Suite(
+    .enabled(if: enabled, "set GCPAPI_LIVE_TESTS=1 to run against the real API"), .serialized,
+    OutagesAreKnownIssues())
 struct LiveTests {
     let garmin: GarminClient
     let today = GarminDate.today(in: .gmt)
@@ -100,7 +123,7 @@ struct LiveTests {
                 start: today.adding(days: -365), end: today))
     }
 
-    @Test func bodyAndNutrition() async throws {
+    @Test func body() async throws {
         checkModel(
             "getWeightRange",
             try await garmin.getWeightRange(
@@ -108,13 +131,17 @@ struct LiveTests {
         checkModel(
             "getEffectiveWeightGoals",
             try await garmin.getEffectiveWeightGoals(start: weekAgo, end: yesterday))
-        checkModel("getDailyFoodLogs", try await garmin.getDailyFoodLogs(yesterday))
         if let summary = try await garmin.getMenstrualCycleSummary(yesterday) {
             checkModel("getMenstrualCycleSummary", summary)
         }
         if let view = try await garmin.getMenstrualCycleDayView(yesterday, today: today) {
             checkModel("getMenstrualCycleDayView", view)
         }
+    }
+
+    /// On its own, so that an outage of the nutrition service skips nothing else.
+    @Test func nutrition() async throws {
+        checkModel("getDailyFoodLogs", try await garmin.getDailyFoodLogs(yesterday))
     }
 
     @Test func activityEndpoints() async throws {
