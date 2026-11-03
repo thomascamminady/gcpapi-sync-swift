@@ -135,7 +135,16 @@ jobs:
         # most, never values (see Tests/LiveTests/LiveTests.swift).
         env:
           GCPAPI_LIVE_TESTS: "1"
-        run: swift test --force-resolved-versions --filter LiveTests
+        run: |
+          set -o pipefail
+          swift test --force-resolved-versions --filter LiveTests | tee "$RUNNER_TEMP/live.log"
+      - name: Report Garmin's outages
+        # An endpoint whose server fails is a known issue (Tests/LiveTests/LiveTests.swift):
+        # a warning here, not a failure, since the API did not change.
+        if: always() && env.GARMIN_PERSONAL_API_KEY != ''
+        run: |
+          grep -oE "[A-Za-z]+\(\): Garmin's server answered HTTP [0-9]+" "$RUNNER_TEMP/live.log" \
+            | while read -r outage; do echo "::warning title=Outage at Garmin::$outage"; done || true
       - name: Tools to report a failure
         if: failure()
         run: |
