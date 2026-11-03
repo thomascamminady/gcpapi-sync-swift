@@ -28,7 +28,6 @@ enum Constants {
 
     // The activity search fails with HTTP 500 for pages larger than about 45 activities,
     // including the server's own default of 99. The client always sends an explicit limit.
-    static let defaultActivityPageSize = 20
     static let maxActivityPageSize = 45
 
     /// Refuse to decompress implausibly large activity archives.

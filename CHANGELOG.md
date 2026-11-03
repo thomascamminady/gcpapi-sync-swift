@@ -8,6 +8,12 @@ date records when the current state of Garmin's API was picked up (it changes on
 Garmin changes something). `swift run bump-version` computes the next version. The date
 component matches the Python version's: the same date means the same state of Garmin's API.
 
+## [0.3.20261022] - 2026-11-03
+
+### Changed
+
+- Search activities 45 to a request, the most Garmin answers at once, instead of 20: half the requests against Garmin's 100 a minute
+
 ## [0.2.20261022] - 2026-10-29
 
 ### Changed
