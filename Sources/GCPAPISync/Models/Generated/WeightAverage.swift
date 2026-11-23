@@ -3,12 +3,11 @@
 
 /// Average weight and body composition measurements over a date range.
 public struct WeightAverage: GarminModel {
-    /// Start date of the range for which the averages are calculated. DateFormat:
-    /// yyyy-MM-dd'T'HH:mm:ss.SSSZ.
-    public var from: LocalDateTime?
-    /// End date of the range for which the averages are calculated. DateFormat:
-    /// yyyy-MM-dd'T'HH:mm:ss.SSSZ.
-    public var until: LocalDateTime?
+    /// Start date of the range for which the averages are calculated. DateFormat: epoch
+    /// milliseconds.
+    public var from: Double?
+    /// End date of the range for which the averages are calculated. DateFormat: epoch milliseconds.
+    public var until: Double?
     /// Average weight over the date range.
     public var weight: Double?
     /// Average Body Mass Index (BMI) over the date range.
@@ -32,8 +31,8 @@ public struct WeightAverage: GarminModel {
 
     /// A value with the given fields; optional fields default to `nil`.
     public init(
-        from: LocalDateTime? = nil,
-        until: LocalDateTime? = nil,
+        from: Double? = nil,
+        until: Double? = nil,
         weight: Double? = nil,
         bmi: Double? = nil,
         bodyFat: Double? = nil,
@@ -78,8 +77,8 @@ public struct WeightAverage: GarminModel {
     /// Decode Garmin's JSON; unknown members go to ``extraFields``.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        from = try container.decodeIfPresent(LocalDateTime.self, forKey: .from)
-        until = try container.decodeIfPresent(LocalDateTime.self, forKey: .until)
+        from = try container.decodeIfPresent(Double.self, forKey: .from)
+        until = try container.decodeIfPresent(Double.self, forKey: .until)
         weight = try container.decodeIfPresent(Double.self, forKey: .weight)
         bmi = try container.decodeIfPresent(Double.self, forKey: .bmi)
         bodyFat = try container.decodeIfPresent(Double.self, forKey: .bodyFat)

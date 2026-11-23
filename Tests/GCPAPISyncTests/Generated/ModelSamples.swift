@@ -534,10 +534,9 @@ let modelSamples: [ModelSample] = [
     ModelSample(
         type: DateWeight.self,
         full: [
-            "date": "2026-01-15T08:00:00.0", "calendarDate": "2026-01-15", "weight": 1.5,
-            "bmi": 1.5, "bodyFat": 1.5, "bodyWater": 1.5, "boneMass": 7, "muscleMass": 7,
-            "physiqueRating": 7, "visceralFat": 7, "metabolicAge": 1.5,
-            "timestampGMT": "2026-01-15T08:00:00.0", "weightDelta": 1.5, "samplePk": 7,
+            "date": 1.5, "calendarDate": "2026-01-15", "weight": 1.5, "bmi": 1.5, "bodyFat": 1.5,
+            "bodyWater": 1.5, "boneMass": 7, "muscleMass": 7, "physiqueRating": 7, "visceralFat": 7,
+            "metabolicAge": 1.5, "timestampGMT": 1.5, "weightDelta": 1.5, "samplePk": 7,
             "sourceType": "text",
         ], minimal: [:]
     ) {
@@ -937,6 +936,15 @@ let modelSamples: [ModelSample] = [
         }
     },
     ModelSample(
+        type: MaxMet.self, full: ["generic": [:], "cycling": [:], "rowing": [:]], minimal: [:]
+    ) {
+        ($0 as? MaxMet).map {
+            MaxMet(
+                generic: $0.generic, cycling: $0.cycling, rowing: $0.rowing,
+                extraFields: $0.extraFields)
+        }
+    },
+    ModelSample(
         type: Meal.self,
         full: [
             "defaultMealName": "text", "displayOrder": 7, "endTime": "08:00:00", "goals": [:],
@@ -1243,6 +1251,13 @@ let modelSamples: [ModelSample] = [
                 batteryStatus: $0.batteryStatus, bleDeviceType: $0.bleDeviceType,
                 productName: $0.productName, batteryLevel: $0.batteryLevel,
                 extraFields: $0.extraFields)
+        }
+    },
+    ModelSample(
+        type: SimpleActivityType.self, full: ["key": "text", "parent": "text"], minimal: [:]
+    ) {
+        ($0 as? SimpleActivityType).map {
+            SimpleActivityType(key: $0.key, parent: $0.parent, extraFields: $0.extraFields)
         }
     },
     ModelSample(
@@ -2351,6 +2366,17 @@ let modelSamples: [ModelSample] = [
             )
         }
     },
+    ModelSample(
+        type: VO2Max.self,
+        full: ["calendarDate": "2026-01-15", "vo2MaxPreciseValue": 1.5, "vo2MaxValue": 1.5],
+        minimal: [:]
+    ) {
+        ($0 as? VO2Max).map {
+            VO2Max(
+                calendarDate: $0.calendarDate, vo2MaxPreciseValue: $0.vo2MaxPreciseValue,
+                vo2MaxValue: $0.vo2MaxValue, extraFields: $0.extraFields)
+        }
+    },
     ModelSample(type: VideoGameInfo.self, full: ["name": "text", "type": "text"], minimal: [:]) {
         ($0 as? VideoGameInfo).map {
             VideoGameInfo(name: $0.name, type: $0.type, extraFields: $0.extraFields)
@@ -2359,9 +2385,9 @@ let modelSamples: [ModelSample] = [
     ModelSample(
         type: WeightAverage.self,
         full: [
-            "from": "2026-01-15T08:00:00.0", "until": "2026-01-15T08:00:00.0", "weight": 1.5,
-            "bmi": 1.5, "bodyFat": 1.5, "bodyWater": 1.5, "boneMass": 7, "muscleMass": 7,
-            "physiqueRating": 7, "visceralFat": 7, "metabolicAge": 1.5,
+            "from": 1.5, "until": 1.5, "weight": 1.5, "bmi": 1.5, "bodyFat": 1.5, "bodyWater": 1.5,
+            "boneMass": 7, "muscleMass": 7, "physiqueRating": 7, "visceralFat": 7,
+            "metabolicAge": 1.5,
         ], minimal: [:]
     ) {
         ($0 as? WeightAverage).map {

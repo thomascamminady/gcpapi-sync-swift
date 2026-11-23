@@ -5,6 +5,12 @@
   "endpoints": [
     {
       "method": "GET",
+      "path": "/activity-service/activity/activityTypes/simple",
+      "parameters": [],
+      "response": "list[SimpleActivityType]"
+    },
+    {
+      "method": "GET",
       "path": "/activity-service/activity/{activityId}",
       "parameters": [
         {
@@ -323,6 +329,31 @@
         }
       ],
       "response": "HrvChart"
+    },
+    {
+      "method": "GET",
+      "path": "/metrics-service/metrics/maxmet/daily/{startDate}/{endDate}",
+      "parameters": [
+        {
+          "name": "endDate",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "startDate",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "sport",
+          "in": "query",
+          "required": false,
+          "type": "array"
+        }
+      ],
+      "response": "list[MaxMet]"
     },
     {
       "method": "GET",
